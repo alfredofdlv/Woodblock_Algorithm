@@ -1,233 +1,253 @@
 import heapq
 from copy import deepcopy
+import math
 
-# --------------------------------------------------
-# Estructura para manejar el nodo en A*
-# --------------------------------------------------
+# ==========================
+# Representación de piezas
+# ==========================
+# Definición de las 3 piezas (offsets relativos a (0,0))
+piece_2x2 = [(0, 0), (0, 1), (1, 0), (1, 1)]
+piece_2x1 = [(0, 0), (1, 0)]
+piece_1x2 = [(0, 0), (0, 1)]
+
+BASE_PIECES = [piece_2x2, piece_2x1, piece_1x2]
+
+def rotate_offsets(offsets):
+    """
+    Rota 90° en sentido horario: (r, c) -> (c, -r),
+    luego normaliza para que el offset mínimo sea (0,0).
+    """
+    rotated = [(c, -r) for (r, c) in offsets]
+    min_r = min(r for (r, c) in rotated)
+    min_c = min(c for (r, c) in rotated)
+    normalized = [(r - min_r, c - min_c) for (r, c) in rotated]
+    return sorted(normalized)
+
+def generate_orientations(piece):
+    """
+    Genera todas las orientaciones únicas (rotaciones) de la pieza.
+    """
+    orientations = set()
+    current = sorted(piece)
+    for _ in range(4):
+        current = rotate_offsets(current)
+        orientations.add(tuple(current))
+    return [list(o) for o in orientations]
+
+# Precalcular orientaciones para cada pieza
+PIECES_WITH_ORIENTATIONS = []
+for p in BASE_PIECES:
+    orients = generate_orientations(p)
+    PIECES_WITH_ORIENTATIONS.append(orients)
+
+# ==========================
+# Definición del nodo
+# ==========================
 class Node:
-    def __init__(self, board_blocks, board_diamonds, remaining_diamonds, parent=None, g=0, h=0):
-        self.board_blocks = board_blocks
-        self.board_diamonds = board_diamonds
-        self.remaining_diamonds = remaining_diamonds
-        self.parent = parent  # Para reconstruir la solución
-        self.g = g            # Coste real desde el inicio
-        self.h = h            # Heurística
-        self.f = g + h        # f = g + h
+    def __init__(self, board, diamonds, score, g=0, h=0, parent=None):
+        self.board = board              # Matriz 5x5 de 0/1 (bloques)
+        self.diamonds = diamonds        # Matriz 5x5 de 0/1 (diamantes "fijos")
+        self.score = score              # Diamantes acumulados (por limpieza de línea)
+        self.g = g                      # Número de piezas usadas hasta el momento
+        self.h = h                      # Heurística
+        self.f = g + h
+        self.parent = parent            # Para reconstruir la solución
 
     def __lt__(self, other):
-        # Permite comparar nodos en la priority queue (heapq)
         return self.f < other.f
 
+# ==========================
+# Funciones de utilidades
+# ==========================
+def print_state(node):
+    print(f"Score: {node.score}, Piezas usadas: {node.g}")
+    print("Board:")
+    for row in node.board:
+        print(row)
+    print("Diamonds:")
+    for row in node.diamonds:
+        print(row)
+    print("-" * 20)
 
-# --------------------------------------------------
-# Función para contar espacios libres en el tablero
-# (bloques y diamantes juntos o separados según tu lógica).
-# --------------------------------------------------
-def count_empty_spaces(board_blocks, board_diamonds):
+def board_to_tuple(board):
+    return tuple(tuple(row) for row in board)
+
+def state_key(node):
+    # La clave del estado se forma a partir de board y diamonds y score.
+    return (board_to_tuple(node.board), board_to_tuple(node.diamonds), node.score)
+
+# ==========================
+# Función de limpieza de líneas
+# ==========================
+def remove_complete_lines(board, diamonds):
     """
-    Retorna el número de celdas que están vacías 
-    (ni bloque ni diamante).
+    Verifica si hay filas o columnas completas.
+    Si una fila/columna está completamente llena (con 1 en board),
+    se "limpia": se ponen a 0 en board y en diamonds, y se suman los diamantes
+    que había en esa línea.
+    Retorna (new_board, new_diamonds, diamonds_collected).
     """
-    empty_count = 0
-    for i in range(5):
+    rows_to_clear = [i for i in range(5) if all(board[i][j] == 1 for j in range(5))]
+    cols_to_clear = [j for j in range(5) if all(board[i][j] == 1 for i in range(5))]
+
+    diamonds_collected = 0
+    new_board = deepcopy(board)
+    new_diamonds = deepcopy(diamonds)
+    
+    # Limpiar filas
+    for i in rows_to_clear:
         for j in range(5):
-            if board_blocks[i][j] == 0 and board_diamonds[i][j] == 0:
-                empty_count += 1
-    return empty_count
+            if new_diamonds[i][j] == 1:
+                diamonds_collected += 1
+            new_board[i][j] = 0
+            new_diamonds[i][j] = 0
 
+    # Limpiar columnas
+    for j in cols_to_clear:
+        for i in range(5):
+            # Evitamos contar dos veces si ya se limpió en fila
+            if new_diamonds[i][j] == 1:
+                diamonds_collected += 1
+            new_board[i][j] = 0
+            new_diamonds[i][j] = 0
 
-# --------------------------------------------------
-# Ejemplo de función heurística
-# --------------------------------------------------
-def heuristic(board_blocks, board_diamonds, remaining_diamonds):
+    return new_board, new_diamonds, diamonds_collected
+
+# ==========================
+# Funciones de colocación de piezas
+# ==========================
+def can_place(board, piece_orientation, r0, c0):
     """
-    Heurística simple que combina:
-      - # de diamantes restantes
-      - # de espacios libres
-    Ajusta alpha y beta según tu preferencia.
+    Verifica si la pieza (definida por sus offsets) se puede colocar
+    en (r0, c0) sin salirse del tablero y sin superponerse a bloques existentes.
     """
-    alpha = 5  # Pondera la importancia de colocar diamantes
-    beta = 1   # Pondera la importancia de rellenar espacios
-    
-    # Cuenta cuántos espacios vacíos hay
-    empty_count = count_empty_spaces(board_blocks, board_diamonds)
-    
-    # Heurística = alpha * (#diamantes) + beta * (#espacios)
-    return alpha * remaining_diamonds + beta * empty_count
+    for (dr, dc) in piece_orientation:
+        r = r0 + dr
+        c = c0 + dc
+        if r < 0 or r >= 5 or c < 0 or c >= 5:
+            return False
+        if board[r][c] == 1:
+            return False
+    return True
 
-
-# --------------------------------------------------
-# Verifica si un diamante (o bloque) se puede colocar 
-# en una posición (i, j) dada.
-# --------------------------------------------------
-def can_place_diamond(board_blocks, board_diamonds, i, j):
+def place_piece(board, piece_orientation, r0, c0):
     """
-    En este ejemplo, consideramos que un diamante ocupa 
-    solo 1 celda (simplificado). Si tu juego maneja 
-    formas mayores, tendrás que verificar todas las 
-    celdas que ocupa la forma.
+    Coloca la pieza en el board (copia) marcando con 1 las celdas ocupadas.
+    Retorna el nuevo board.
     """
-    # Debe estar dentro de los límites
-    if i < 0 or i >= 5 or j < 0 or j >= 5:
-        return False
-    
-    # La posición debe estar libre (sin bloque y sin diamante)
-    if board_blocks[i][j] == 0 and board_diamonds[i][j] == 0:
-        return True
-    return False
+    new_board = deepcopy(board)
+    for (dr, dc) in piece_orientation:
+        r = r0 + dr
+        c = c0 + dc
+        new_board[r][c] = 1
+    return new_board
 
+# ==========================
+# Heurística
+# ==========================
+def heuristic(score):
+    """
+    Objetivo: conseguir al menos 3 diamantes.
+    Suponiendo que en el mejor caso cada pieza aporta 1 diamante,
+    una heurística muy simple es:
+         h = max(0, 3 - score)
+    """
+    return max(0, 3 - score)
 
-# --------------------------------------------------
-# Genera los sucesores de un nodo, colocando 
-# el siguiente diamante en todas las posiciones posibles.
-# --------------------------------------------------
-def generate_successors(current_node):
+# ==========================
+# Generación de sucesores
+# ==========================
+def generate_successors(node):
     successors = []
-    
-    # Si no quedan diamantes por colocar, no hay sucesores
-    if current_node.remaining_diamonds == 0:
-        return successors
-    
-    # Intentar colocar un diamante en cada celda posible
-    for i in range(5):
-        for j in range(5):
-            if can_place_diamond(current_node.board_blocks, current_node.board_diamonds, i, j):
-                # Copiamos tableros para no alterar el actual
-                new_board_blocks = deepcopy(current_node.board_blocks)
-                new_board_diamonds = deepcopy(current_node.board_diamonds)
-                
-                # Colocamos el diamante (1)
-                new_board_diamonds[i][j] = 1
-                
-                # Creamos el nuevo nodo
-                new_remaining_diamonds = current_node.remaining_diamonds - 1
-                g_new = current_node.g + 1  # coste de la acción = 1 (colocar diamante)
-                h_new = heuristic(new_board_blocks, new_board_diamonds, new_remaining_diamonds)
-                
-                successor = Node(
-                    board_blocks=new_board_blocks,
-                    board_diamonds=new_board_diamonds,
-                    remaining_diamonds=new_remaining_diamonds,
-                    parent=current_node,
-                    g=g_new,
-                    h=h_new
-                )
-                successors.append(successor)
-    
+    # Para cada tipo de pieza (2x2, 2x1, 1x2) y cada orientación:
+    for piece in PIECES_WITH_ORIENTATIONS:
+        for orientation in piece:
+            # Recorrer cada celda del tablero para ver dónde se puede colocar
+            for r in range(5):
+                for c in range(5):
+                    if can_place(node.board, orientation, r, c):
+                        new_board = place_piece(node.board, orientation, r, c)
+                        # Tras colocar, se limpian filas/columnas completas y se recogen diamantes.
+                        new_board, new_diamonds, collected = remove_complete_lines(new_board, node.diamonds)
+                        new_score = node.score + collected
+                        new_g = node.g + 1  # Se ha usado una pieza más
+                        new_h = heuristic(new_score)
+                        new_node = Node(new_board, new_diamonds, new_score, g=new_g, h=new_h, parent=node)
+                        successors.append(new_node)
     return successors
 
-def is_goal_state(node):
-    """
-    Retorna True si no quedan diamantes por colocar.
-    """
-    return node.remaining_diamonds == 0
+# ==========================
+# Prueba de meta
+# ==========================
+def is_goal(node):
+    return node.score >= 3
 
-def board_to_tuple(board_blocks, board_diamonds, remaining_diamonds):
-    """
-    Convierte la información del estado en una tupla hasheable,
-    para poder guardarlo en 'visited' o 'closed set'.
-    """
-    blocks_tuple = tuple(tuple(row) for row in board_blocks)
-    diamonds_tuple = tuple(tuple(row) for row in board_diamonds)
-    return (blocks_tuple, diamonds_tuple, remaining_diamonds)
-
-
-def a_star_search(initial_board_blocks, initial_board_diamonds, initial_diamonds):
-    """
-    Implementa la búsqueda A* para el juego de Wood Block en un tablero 5x5.
-    Retorna el nodo objetivo y/o la secuencia de movimientos.
-    """
-    # Nodo inicial
-    h0 = heuristic(initial_board_blocks, initial_board_diamonds, initial_diamonds)
-    start_node = Node(
-        board_blocks=initial_board_blocks,
-        board_diamonds=initial_board_diamonds,
-        remaining_diamonds=initial_diamonds,
-        parent=None,
-        g=0,
-        h=h0
-    )
-    
-    # Estructuras para A*
+# ==========================
+# Algoritmo A*
+# ==========================
+def a_star_search(initial_board, initial_diamonds):
+    init_score = 0
+    start_node = Node(initial_board, initial_diamonds, init_score, g=0, h=heuristic(init_score))
     open_list = []
     heapq.heappush(open_list, start_node)
-    
     closed_set = set()
-    
+
     while open_list:
-        current_node = heapq.heappop(open_list)
+        current = heapq.heappop(open_list)
+        # Si se alcanza el objetivo, se devuelve el camino de solución
+        if is_goal(current):
+            return reconstruct_path(current)
         
-        # Verificar si es estado objetivo
-        if is_goal_state(current_node):
-            # Reconstruir la ruta
-            return reconstruct_path(current_node)
-        
-        # Añadir al closed_set
-        state_key = board_to_tuple(current_node.board_blocks, current_node.board_diamonds, current_node.remaining_diamonds)
-        if state_key in closed_set:
+        key = state_key(current)
+        if key in closed_set:
             continue
-        closed_set.add(state_key)
+        closed_set.add(key)
         
-        # Expandir sucesores
-        successors = generate_successors(current_node)
-        for succ in successors:
-            succ_key = board_to_tuple(succ.board_blocks, succ.board_diamonds, succ.remaining_diamonds)
-            if succ_key not in closed_set:
-                heapq.heappush(open_list, succ)
+        for child in generate_successors(current):
+            child_key = state_key(child)
+            if child_key not in closed_set:
+                heapq.heappush(open_list, child)
     
-    # Si se vacía la open_list sin encontrar solución
     return None
 
-
-def reconstruct_path(goal_node):
-    """
-    Reconstruye la secuencia de estados (o acciones) desde el nodo objetivo
-    hasta la raíz (nodo inicial).
-    """
+def reconstruct_path(node):
     path = []
-    current = goal_node
-    while current is not None:
-        path.append(current)
-        current = current.parent
+    while node:
+        path.append(node)
+        node = node.parent
     path.reverse()
     return path
 
+# ==========================
+# Ejemplo de uso con el tablero dado
+# ==========================
 def main():
-    # Tableros iniciales 5x5
-    # Ejemplo: Sin bloques ocupados y sin diamantes
-    initial_board_blocks = [
-        [0,0,0,0,0],
-        [0,0,0,0,0],
-        [0,0,0,0,0],
-        [0,0,0,0,0],
-        [0,0,0,0,0]
+    # Tablero inicial (bloques)
+    initial_board = [
+        [1,1,0,0,0],
+        [1,0,0,1,0],
+        [1,0,0,1,1],
+        [0,0,0,0,1],
+        [0,0,1,0,0]
     ]
-    initial_board_diamonds = [
-        [0,0,0,0,0],
-        [0,0,0,0,0],
-        [0,0,0,0,0],
-        [0,0,0,0,0],
-        [0,0,0,0,0]
+    # Matriz de diamantes (fijos en el tablero)
+    initial_diamonds = [
+        [0,1,0,0,0],
+        [0,0,0,1,0],
+        [1,0,0,0,0],
+        [0,0,0,0,1],
+        [0,0,1,0,0]
     ]
-    # Supongamos que queremos colocar 3 diamantes
-    initial_diamonds = 3
-
-    solution_path = a_star_search(initial_board_blocks, initial_board_diamonds, initial_diamonds)
-
-    if solution_path is not None:
-        print("¡Solución encontrada!")
-        for idx, node in enumerate(solution_path):
-            print(f"\nPaso {idx}:")
-            print("Diamantes restantes:", node.remaining_diamonds)
-            print("Tablero (bloques):")
-            for row in node.board_blocks:
-                print(row)
-            print("Tablero (diamantes):")
-            for row in node.board_diamonds:
-                print(row)
-    else:
+    
+    solution_path = a_star_search(initial_board, initial_diamonds)
+    
+    if solution_path is None:
         print("No se encontró solución.")
-
+    else:
+        print("¡Solución encontrada!")
+        for i, node in enumerate(solution_path):
+            print(f"\nPaso {i}:")
+            print_state(node)
 
 if __name__ == "__main__":
     main()
