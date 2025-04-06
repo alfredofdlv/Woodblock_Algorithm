@@ -13,40 +13,64 @@ class GreedySearch(SearchAlgorithm):
     """
     def evaluate_move(self, board, diamonds, block, move):
         """
-        Se basa en cuántos diamantes destruye y cuántos espacios
-        vacíos quedan (parecido a la 'evaluate_move' de main.py).
+        Evaluate a move by applying it and computing a heuristic value.
+        Here, we use a simple heuristic: the number of remaining diamonds.
+        Lower values are better.
         """
         new_board, new_diamonds = self.apply_move(board, diamonds, move, block)
+        # Heuristic: count remaining diamonds.
+        h = sum(sum(row) for row in new_diamonds)
+        return h
 
-        # Diamantes destruidos (diferencia de diamantes)
-        original_count = sum(sum(r) for r in diamonds)
-        new_count = sum(sum(r) for r in new_diamonds)
-        destroyed = original_count - new_count
-
-        # Espacios vacíos
-        empty_spaces = np.sum(new_board == 0)
-
-        # Buscamos maximizar (destroyed - #espacios vacíos)
-        # Ajusta la fórmula a tus necesidades
-        return destroyed - (25 - empty_spaces)
-    
-    def get_best_move(self, blocks):
+    def get_best_move(self, possible_moves, board, diamonds):
         """
-        Recorre todas las jugadas posibles (para cada block, cada posición)
-        y devuelve la que tenga mayor evaluación inmediata.
+        Perform a Greedy Best-First Search over the state space starting from the given board
+        and diamond configuration. The algorithm considers all three block pieces.
+        It returns the best move as a tuple (block, x, y) corresponding to the first move
+        (from the initial state) that leads to a goal state (i.e., no diamonds remain), based
+        on the heuristic value.
         """
-        best_score = float('-inf')
-        best_action = None
+        # Update instance variables.
+        self.board = copy.deepcopy(board)
+        self.diamonds = copy.deepcopy(diamonds)
+        self.grid_size = len(board)
+        
+        # Initialize the priority queue (min-heap).
+        # Each state: (heuristic_value, node_id, current_board, current_diamonds, first_move)
+        # first_move is (block, x, y) taken from the initial state.
+        node_counter = 0
+        initial_state = (self.evaluate_move(board, diamonds, self.blocks[0], (0,0)),
+                         node_counter,
+                         copy.deepcopy(board),
+                         copy.deepcopy(diamonds),
+                         None)
+        node_counter += 1
+        frontier = []
+        heapq.heappush(frontier, initial_state)
+        explored = set()
+        
+        while frontier:
+            h, _, current_board, current_diamonds, first_move = heapq.heappop(frontier)
+            if self.is_goal(current_diamonds):
+                return first_move if first_move is not None else None
 
-        for block in self.blocks:
-            moves = self.possible_moves(block)
-            for move in moves:
-                score = self.evaluate_move(self.board, self.diamonds, block, move)
-                if score > best_score:
-                    best_score = score
-                    best_action = (block, move[0], move[1])
-
-        return best_action
+            state_hash = self.hash_state(current_board, current_diamonds)
+            if state_hash in explored:
+                continue
+            explored.add(state_hash)
+            
+            # Update self.board for generating moves.
+            self.board = current_board
+            
+            for block in self.blocks:
+                moves = self.possible_moves(block)
+                for move in moves:
+                    new_board, new_diamonds = self.apply_move(current_board, current_diamonds, move, block)
+                    new_h = self.evaluate_move(current_board, current_diamonds, block, move)
+                    next_first_move = first_move if first_move is not None else (block, move[0], move[1])
+                    heapq.heappush(frontier, (new_h, node_counter, new_board, new_diamonds, next_first_move))
+                    node_counter += 1
+        return None
 
 
 class AStarSearch(SearchAlgorithm):
@@ -57,143 +81,150 @@ class AStarSearch(SearchAlgorithm):
     - g(n): número de movimientos hasta 'n'
     - h(n): heurística (por ejemplo, número de diamantes restantes)
     """
-    def evaluate_move(self, move):
-        """
-        Este método no se usa directamente en la planificación A*
-        (lo hacemos en la expansión con open/closed).
-        Lo mantenemos para cumplir con la interfaz.
-        """
-        return 0
-
+    def evaluate_move(self, board, diamonds, block, move):
+        new_board, new_diamonds = self.apply_move(board, diamonds, move, block)
+        # Simple heuristic: count the number of remaining diamonds.
+        return sum(sum(row) for row in new_diamonds)
+    
     def heuristic(self, diamonds):
-        """
-        Heurística: estimación de cuántos movimientos faltan.
-        Un ejemplo sencillo: la cantidad de diamantes que quedan.
-        """
+        """Heuristic: number of remaining diamonds."""
         return sum(sum(row) for row in diamonds)
-
-    def get_best_move(self, blocks):
+    
+    def get_best_move(self, possible_moves, board, diamonds):
         """
-        Realiza una búsqueda A* para encontrar un plan que elimine
-        todos los diamantes. Luego devuelve el primer movimiento
-        de ese plan.
+        Perform an A* search over the state space starting from the given board
+        and diamond configuration. The algorithm considers all three block pieces:
+        - Horizontal block of 3: [[1, 1, 1]]
+        - Vertical block of 3:   [[1], [1], [1]]
+        - Square block of 2x2:    [[1, 1], [1, 1]]
+        Returns the best move as a tuple (block, x, y) corresponding to the first move
+        that leads to a goal state (i.e., no diamonds remain).
         """
-        import heapq
-
-        start_board = copy.deepcopy(self.board)
-        start_diamonds = copy.deepcopy(self.diamonds)
-        start_state = self.hash_state(start_board, start_diamonds)
-
-        # La cola de prioridad A* guardará tuplas de la forma:
-        # (f, g, (board, diamonds), path)
-        # donde 'path' es la secuencia de (block, x, y) hasta ahora.
-        open_heap = []
+        self.board = copy.deepcopy(board)
+        self.diamonds = copy.deepcopy(diamonds)
+        self.grid_size = len(board)
+    
+        
+        start_board = copy.deepcopy(board)
+        start_diamonds = copy.deepcopy(diamonds)
         g_start = 0
         h_start = self.heuristic(start_diamonds)
         f_start = g_start + h_start
-        heapq.heappush(open_heap, (f_start, g_start, (start_board, start_diamonds), []))
-
+        
+        # Priority queue: each entry is (f, g, state_hash, current_board, current_diamonds, path)
+        # where path is a sequence of moves, each of the form (block, x, y).
+        open_heap = []
+        start_hash = self.hash_state(start_board, start_diamonds)
+        heapq.heappush(open_heap, (f_start, g_start, start_hash, start_board, start_diamonds, []))
+        
         closed_set = set()
-
+        node_counter = 0  # Not strictly needed now.
+        
         while open_heap:
-            f, g, (board_current, diamonds_current), path = heapq.heappop(open_heap)
-
-            if self.is_goal(diamonds_current):
-                # Si ya no hay diamantes, retornamos el primer movimiento
-                if path:
-                    return path[0]  # (block, x, y)
-                else:
-                    return None  # No se requirió ningún movimiento
-
-            state_id = self.hash_state(board_current, diamonds_current)
-            if state_id in closed_set:
+            f, g, state_hash, current_board, current_diamonds, path = heapq.heappop(open_heap)
+            
+            if self.is_goal(current_diamonds):
+                return path[0] if path else None
+            
+            if state_hash in closed_set:
                 continue
-
-            closed_set.add(state_id)
-
-            # Expansión: probar colocar cualquiera de los 'blocks'
+            closed_set.add(state_hash)
+            
+            self.board = current_board  # Update for move generation.
+            
             for block in self.blocks:
-                pmoves = self.possible_moves(block)
-                for move in pmoves:
-                    new_board, new_diamonds = self.apply_move(board_current, diamonds_current, move, block)
-                    new_state_id = self.hash_state(new_board, new_diamonds)
-                    if new_state_id in closed_set:
+                moves = self.possible_moves(block)
+                for move in moves:
+                    new_board, new_diamonds = self.apply_move(current_board, current_diamonds, move, block)
+                    new_state_hash = self.hash_state(new_board, new_diamonds)
+                    if new_state_hash in closed_set:
                         continue
-
                     g_new = g + 1
                     h_new = self.heuristic(new_diamonds)
                     f_new = g_new + h_new
                     new_path = path + [(block, move[0], move[1])]
-                    heapq.heappush(open_heap, (f_new, g_new, (new_board, new_diamonds), new_path))
+                    heapq.heappush(open_heap, (f_new, g_new, node_counter, new_board, new_diamonds, new_path))
+                    node_counter += 1
 
-        # Si el heap se vacía sin encontrar meta, no hay plan
+        
         return None
+
+
 
 
 class WeightedAStarSearch(SearchAlgorithm):
     """
-    A* Weighted: f(n) = g(n) + w * h(n)
-    Favorece estados con menor heurística cuando w > 1.
+    Weighted A*: f(n) = g(n) + w * h(n)
+    Favours states with a lower heuristic value when w > 1.
     """
     def __init__(self, name, board, diamonds, w=1.5, description="Weighted A*"):
         super().__init__(name, board, diamonds, description)
-        self.w = w  # Peso para la heurística
+        self.w = w  # Weight for the heuristic
+        # Define available block pieces if not already set.
+        self.blocks = [
+            [[1, 1, 1]],      # Horizontal block of 3
+            [[1], [1], [1]],   # Vertical block of 3
+            [[1, 1], [1, 1]]   # Square block of 2x2
+        ]
 
-    def evaluate_move(self, move):
-        return 0  # No se usa directamente
+    def evaluate_move(self, board, diamonds, block, move):
+        # This method is not used directly in our implementation.
+        return 0
 
     def heuristic(self, diamonds):
         """
-        Heurística similar: número de diamantes restantes.
-        Ajusta a tu preferencia.
+        Heuristic: number of remaining diamonds.
         """
         return sum(sum(row) for row in diamonds)
 
-    def get_best_move(self, blocks):
-        import heapq
-
-        start_board = copy.deepcopy(self.board)
-        start_diamonds = copy.deepcopy(self.diamonds)
-        start_state = self.hash_state(start_board, start_diamonds)
-
-        # La cola de prioridad con tuplas (f, g, (board, diamonds), path)
-        open_heap = []
+    def get_best_move(self, possible_moves, board, diamonds):
+        """
+        Perform a Weighted A* search over the state space starting from the given board
+        and diamond configuration. The search considers all three block pieces.
+        Returns the best move as a tuple (block, x, y) corresponding to the first move
+        in the plan that leads to a goal state (i.e. no diamonds remain).
+        """
+        self.board = copy.deepcopy(board)
+        self.diamonds = copy.deepcopy(diamonds)
+        self.grid_size = len(board)
+        
+        start_board = copy.deepcopy(board)
+        start_diamonds = copy.deepcopy(diamonds)
         g_start = 0
         h_start = self.heuristic(start_diamonds)
         f_start = g_start + self.w * h_start
-        heapq.heappush(open_heap, (f_start, g_start, (start_board, start_diamonds), []))
-
+        start_state_hash = self.hash_state(start_board, start_diamonds)
+        
+        # Priority queue with tuples: (f, g, state_hash, (board, diamonds), path)
+        open_heap = []
+        heapq.heappush(open_heap, (f_start, g_start, start_state_hash, (start_board, start_diamonds), []))
         closed_set = set()
-
+        
         while open_heap:
-            f, g, (board_current, diamonds_current), path = heapq.heappop(open_heap)
-
-            if self.is_goal(diamonds_current):
-                if path:
-                    return path[0]
-                else:
-                    return None
-
-            state_id = self.hash_state(board_current, diamonds_current)
-            if state_id in closed_set:
+            f, g, state_hash, (current_board, current_diamonds), path = heapq.heappop(open_heap)
+            
+            if self.is_goal(current_diamonds):
+                return path[0] if path else None
+            
+            if state_hash in closed_set:
                 continue
-
-            closed_set.add(state_id)
-
+            closed_set.add(state_hash)
+            
+            self.board = current_board  # Update for move generation.
             for block in self.blocks:
                 pmoves = self.possible_moves(block)
                 for move in pmoves:
-                    new_board, new_diamonds = self.apply_move(board_current, diamonds_current, move, block)
-                    new_state_id = self.hash_state(new_board, new_diamonds)
-                    if new_state_id in closed_set:
+                    new_board, new_diamonds = self.apply_move(current_board, current_diamonds, move, block)
+                    new_state_hash = self.hash_state(new_board, new_diamonds)
+                    if new_state_hash in closed_set:
                         continue
-
+                    
                     g_new = g + 1
                     h_new = self.heuristic(new_diamonds)
                     f_new = g_new + self.w * h_new
                     new_path = path + [(block, move[0], move[1])]
-                    heapq.heappush(open_heap, (f_new, g_new, (new_board, new_diamonds), new_path))
-
+                    heapq.heappush(open_heap, (f_new, g_new, new_state_hash, (new_board, new_diamonds), new_path))
+        
         return None
 if __name__ == "__main__":
     # Tablero de ejemplo 5x5

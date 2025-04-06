@@ -87,7 +87,12 @@ class SearchAlgorithm(ABC):
         return new_board, new_diamonds
 
     def hash_state(self, board, diamonds):
-        """Generate a hashable representation of the state."""
+        # Convert to lists if board or diamonds are numpy arrays.
+        if hasattr(board, "tolist"):
+            board = board.tolist()
+        if hasattr(diamonds, "tolist"):
+            diamonds = diamonds.tolist()
         board_tuple = tuple(tuple(row) for row in board)
         diamonds_tuple = tuple(tuple(row) for row in diamonds)
         return (board_tuple, diamonds_tuple)
+

@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageTk
 import time 
 import random
-from blind_search import DFS, BFS, UniformCostSearch
+from blind_search import DFS, BFS, UniformCostSearch, IterativeDeepeningSearch
 from informed import GreedySearch, AStarSearch, WeightedAStarSearch
 
 
@@ -18,6 +18,7 @@ class WoodBlockAI:
             "BFS": BFS(self.board, self.diamonds),
             "DFS": DFS(self.board, self.diamonds),
             "UCS": UniformCostSearch(self.board, self.diamonds),  
+            "Iterative Deepening" : IterativeDeepeningSearch(self.board, self.diamonds),
             "Greedy": GreedySearch("Greedy", self.board, self.diamonds),
             "A*": AStarSearch("A*", self.board, self.diamonds),
             "A* weighted": WeightedAStarSearch("A* Weighted", self.board, self.diamonds, w=1.5),
@@ -49,22 +50,16 @@ class WoodBlockAI:
         return True
 
     def best_move(self, blocks):
-        search_algorithm = self.ALGORITHM_NAME_MAP.get(self.chosen_algorithm, BFS(self.board, self.diamonds))
+        """Encuentra la mejor jugada basada en la cantidad de diamantes destruidos."""
 
+        search_algorithm = self.ALGORITHM_NAME_MAP.get(self.chosen_algorithm, BFS(self.board, self.diamonds))  # Default to BFS if not found  , BFS(self.board, self.diamonds)
+        
         default_block = [[1, 1, 1]]
         possible_moves = search_algorithm.possible_moves(default_block)
         print("Possible moves (from initial state):", possible_moves)
-
-        if hasattr(search_algorithm, 'get_best_move'):
-            if self.chosen_algorithm in ["Greedy", "A*", "A* weighted"]:
-                move = search_algorithm.get_best_move(search_algorithm.blocks)
-            else:
-                move = search_algorithm.get_best_move(possible_moves, self.board, self.diamonds)
-
-            print(f"Best move found using {search_algorithm.name}:", move)
-            return move
-
-        return None
+        move = search_algorithm.get_best_move(possible_moves, self.board, self.diamonds)
+        print(f"Best move found using {search_algorithm.name}:", move)
+        return move
 
 
 
@@ -81,7 +76,7 @@ class AlgorithmSelectionDialog(tk.Toplevel):
             self, text="Select AI Algorithm:", font=("Helvetica", 14)
         ).pack(pady=10)
 
-        self.algorithms = ["BFS","DFS", "UCS" ,"A*", "A* weighted", "Greedy"]
+        self.algorithms = ["BFS","DFS", "UCS" ,"A*", "A* weighted", "Greedy", "Iterative Deepening"]
         self.selected_algo = tk.StringVar(self)
         self.selected_algo.set(self.algorithms[0])
         option_menu = tk.OptionMenu(self, self.selected_algo, *self.algorithms)

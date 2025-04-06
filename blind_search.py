@@ -160,6 +160,50 @@ class UniformCostSearch(SearchAlgorithm):
                     heapq.heappush(frontier, (next_cost, node_counter, new_board, new_diamonds, next_first_move))
                     node_counter += 1
         return None
+    
+    
+    
+class IterativeDeepeningSearch(SearchAlgorithm):
+    def __init__(self, board, diamonds, name="Iterative Deepening Search"):
+        super().__init__(name, board, diamonds, "Uninformed search algorithm using iterative deepening DFS.")
+
+    def evaluate_move(self, board, diamonds, block, move):
+        # Not used directly in IDS.
+        return 0
+
+
+    def get_best_move(self, possible_moves, board, diamonds, max_depth=50):
+        """
+        Perform an iterative deepening search over the state space.
+        The search considers all three block pieces and returns the best move as a tuple
+        (block, x, y) corresponding to the first move of the found solution.
+        """
+        self.board = copy.deepcopy(board)
+        self.diamonds = copy.deepcopy(diamonds)
+        self.grid_size = len(board)
+        
+        for depth_limit in range(1, max_depth + 1):
+            result = self.depth_limited_search(board, diamonds, depth_limit, [])
+            if result is not None:
+                # Return the first move in the solution path.
+                return result[0]
+        return None
+
+    def depth_limited_search(self, board, diamonds, limit, path):
+        if self.is_goal(diamonds):
+            return path
+        if limit == 0:
+            return None
+        # Expand current state using all available block pieces.
+        for block in self.blocks:
+            moves = self.possible_moves(block)
+            for move in moves:
+                new_board, new_diamonds = self.apply_move(board, diamonds, move, block)
+                new_path = path + [(block, move[0], move[1])]
+                result = self.depth_limited_search(new_board, new_diamonds, limit - 1, new_path)
+                if result is not None:
+                    return result
+        return None
 if __name__ == "__main__":
     # BFSearch algorithm example usage.
     
