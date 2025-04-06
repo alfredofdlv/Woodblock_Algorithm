@@ -29,13 +29,6 @@ class BFS(SearchAlgorithm):
         self.diamonds = copy.deepcopy(diamonds)
         self.grid_size = len(board)
         
-        # Define the available block pieces.
-        blocks = [
-            [[1, 1, 1]],    # Horizontal block of 3
-            [[1], [1], [1]], # Vertical block of 3
-            [[1, 1], [1, 1]]  # Square block of 2x2
-        ]
-        
         # Each state is a tuple: (current_board, current_diamonds, first_move)
         # where first_move is a tuple (block, x, y) indicating the move taken from the initial state.
         initial_state = (copy.deepcopy(board), copy.deepcopy(diamonds), None)
@@ -57,7 +50,7 @@ class BFS(SearchAlgorithm):
             self.board = current_board
             
             # For each block type, generate possible moves.
-            for block in blocks:
+            for block in self.blocks:
                 moves = self.possible_moves(block)
                 for move in moves:
                     new_board, new_diamonds = self.apply_move(current_board, current_diamonds, move, block)
