@@ -4,6 +4,8 @@ from PIL import Image, ImageTk
 import time 
 import random
 from blind_search import DFS, BFS, UniformCostSearch
+from informed import GreedySearch, AStarSearch, WeightedAStarSearch
+
 
 class WoodBlockAI:
     def __init__(self, grid_size=5, chosen_algorithm=None):
@@ -16,10 +18,11 @@ class WoodBlockAI:
             "BFS": BFS(self.board, self.diamonds),
             "DFS": DFS(self.board, self.diamonds),
             "UCS": UniformCostSearch(self.board, self.diamonds),  
-            "Greedy": None, 
-            "A*": None,  
-            "A* weighted": None,  
+            "Greedy": GreedySearch("Greedy", self.board, self.diamonds),
+            "A*": AStarSearch("A*", self.board, self.diamonds),
+            "A* weighted": WeightedAStarSearch("A* Weighted", self.board, self.diamonds, w=1.5),
         }
+
 
     def set_board(self, board, diamonds):
         """Establece el estado inicial del tablero."""
@@ -46,16 +49,23 @@ class WoodBlockAI:
         return True
 
     def best_move(self, blocks):
-        """Encuentra la mejor jugada basada en la cantidad de diamantes destruidos."""
+        search_algorithm = self.ALGORITHM_NAME_MAP.get(self.chosen_algorithm)
 
-        search_algorithm = self.ALGORITHM_NAME_MAP.get(self.chosen_algorithm)  # Default to BFS if not found  , BFS(self.board, self.diamonds)
-        
         default_block = [[1, 1, 1]]
         possible_moves = search_algorithm.possible_moves(default_block)
         print("Possible moves (from initial state):", possible_moves)
-        move = search_algorithm.get_best_move(possible_moves, self.board, self.diamonds)
-        print(f"Best move found using {search_algorithm.name}:", move)
-        return move
+
+        if hasattr(search_algorithm, 'get_best_move'):
+            if self.chosen_algorithm in ["Greedy", "A*", "A* weighted"]:
+                move = search_algorithm.get_best_move(search_algorithm.blocks)
+            else:
+                move = search_algorithm.get_best_move(possible_moves, self.board, self.diamonds)
+
+            print(f"Best move found using {search_algorithm.name}:", move)
+            return move
+
+        return None
+
 
 
 class AlgorithmSelectionDialog(tk.Toplevel):
