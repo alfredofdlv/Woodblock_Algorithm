@@ -6,10 +6,12 @@ import random
 
 # Lógica del juego: WoodBlockAI
 class WoodBlockAI:
-    def __init__(self, grid_size=5):
+    def __init__(self, grid_size=5, chosen_algorithm=None):
+        """Inicializa el juego con un tamaño de tablero y un algoritmo de IA."""
         self.grid_size = grid_size
         self.board = np.zeros((grid_size, grid_size), dtype=int)
         self.diamonds = np.zeros((grid_size, grid_size), dtype=int)
+        self.chosen_algorithm = chosen_algorithm
 
     def set_board(self, board, diamonds):
         """Establece el estado inicial del tablero."""
@@ -62,7 +64,7 @@ class WoodBlockAI:
             diamonds_destroyed - empty_spaces
         )  # Se busca maximizar diamantes y reducir espacios vacíos
 
-    def best_move(self, blocks):
+    def best_move(self, blocks, chosen_algorithm=None):
         """Encuentra la mejor jugada basada en la cantidad de diamantes destruidos."""
         best_score = float("-inf")
         best_move = None
