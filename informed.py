@@ -2,7 +2,7 @@ import copy
 import heapq
 from abc import ABC, abstractmethod
 from algorithms import SearchAlgorithm
-
+import numpy as np
 
 
 class GreedySearch(SearchAlgorithm):
@@ -24,7 +24,7 @@ class GreedySearch(SearchAlgorithm):
         destroyed = original_count - new_count
 
         # Espacios vacíos
-        empty_spaces = sum(row.count(0) for row in new_board)
+        empty_spaces = np.sum(new_board == 0)
 
         # Buscamos maximizar (destroyed - #espacios vacíos)
         # Ajusta la fórmula a tus necesidades

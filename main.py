@@ -49,7 +49,7 @@ class WoodBlockAI:
         return True
 
     def best_move(self, blocks):
-        search_algorithm = self.ALGORITHM_NAME_MAP.get(self.chosen_algorithm)
+        search_algorithm = self.ALGORITHM_NAME_MAP.get(self.chosen_algorithm, BFS(self.board, self.diamonds))
 
         default_block = [[1, 1, 1]]
         possible_moves = search_algorithm.possible_moves(default_block)
@@ -221,7 +221,7 @@ class WoodBlockGUI(tk.Frame):
             return
         block, x, y = move
         self.commit_move(block, x, y)
-        self.auto_timer = self.after(5000, self.auto_play)
+        self.auto_timer = self.after(2500, self.auto_play)
 
     def set_selected_block(self, block):
         self.selected_block = block
@@ -419,7 +419,7 @@ class WoodBlockGUI(tk.Frame):
                         self.canvas.create_rectangle(
                             x1, y1, x2, y2, fill="orange", outline="black"
                         )
-            self.after(500, lambda: self.commit_move(block, x, y))
+            self.after(2500, lambda: self.commit_move(block, x, y))
         else:
             print("No possible moves.")
 
@@ -447,8 +447,13 @@ class WoodBlockGUI(tk.Frame):
             self.show_game_over("YOU'VE WON")
             self.game_over = True
             return True
+        self.after(1500, self._check_moves)
+        return False
+
+    def _check_moves(self):
         has_moves = any(self.game.possible_moves(block) for block in self.blocks)
         if not has_moves:
+            print("No possible moves left, YOU'VE LOST.")
             self.show_game_over("YOU'VE LOST")
             self.game_over = True
             return True
