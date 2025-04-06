@@ -4,7 +4,7 @@ from PIL import Image, ImageTk
 import time 
 import random
 from blind_search import DFS, BFS, UniformCostSearch, IterativeDeepeningSearch
-from informed import GreedySearch, AStarSearch, WeightedAStarSearch
+from informed_search import GreedySearch, AStarSearch, WeightedAStarSearch
 
 
 class WoodBlockAI:
@@ -577,9 +577,9 @@ class GameScreen(tk.Frame):
         game = WoodBlockAI(grid_size, chosen_algorithm=algorithm)
         game.set_board(board, diamonds)
         blocks = [
-            [[1, 1, 1]],  # Bloque horizontal de 3
-            [[1], [1], [1]],  # Bloque vertical de 3
-            [[1, 1], [1, 1]],  # Bloque cuadrado de 2x2
+            [[1, 1, 1]],  # Horizontal Block de 3
+            [[1], [1], [1]],  # Vertical Block de 3
+            [[1, 1], [1, 1]],  # Squared Block de 2x2
         ]
 
         if self.mode == "IA":
@@ -621,19 +621,17 @@ class GameScreen(tk.Frame):
         Devuelve:
         board, diamonds: dos listas de listas (grid_size x grid_size) con valores 0 o 1.
         """
-        # Inicializar tableros vacíos
         board = [[0] * grid_size for _ in range(grid_size)]
         diamonds = [[0] * grid_size for _ in range(grid_size)]
         
-        # Patrones de clusters: cada patrón es una lista de offsets (dx, dy)
-        # que define una formación de bloques.
+
         cluster_patterns = [
-            [(0, 0)],                               # Bloque individual
-            [(0, 0), (0, 1), (1, 0), (1, 1)],         # Bloque 2x2
-            [(0, 0), (0, 1)],                        # Par horizontal
-            [(0, 0), (1, 0)],                        # Par vertical
-            [(0, 0), (0, 1), (0, 2)],                  # Línea horizontal de 3 (si cabe)
-            [(0, 0), (1, 0), (2, 0)]                   # Línea vertical de 3 (si cabe)
+            [(0, 0)],                               
+            [(0, 0), (0, 1), (1, 0), (1, 1)],        
+            [(0, 0), (0, 1)],                        
+            [(0, 0), (1, 0)],                        
+            [(0, 0), (0, 1), (0, 2)],                  
+            [(0, 0), (1, 0), (2, 0)]                   
         ]
         
         blocks_placed = 0

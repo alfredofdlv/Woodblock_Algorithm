@@ -6,10 +6,12 @@ import numpy as np
 
 
 class GreedySearch(SearchAlgorithm):
+    def __init__(self, board, diamonds, name="Greedy Search"):
+        super().__init__(name, board, diamonds, "Greedy search algorithm.")
     """
-    Estrategia Greedy: en cada paso, se escoge el movimiento que
-    maximiza la "ganancia" inmediata, sin mirar más allá.
-    Podemos reutilizar la evaluación local de 'evaluate_move'.
+    Greedy Strategy: at each step, the move that maximizes the immediate
+    "gain" is chosen, without looking further ahead.
+    We can reuse the local evaluation from 'evaluate_move'.
     """
     def evaluate_move(self, board, diamonds, block, move):
         """
@@ -30,14 +32,11 @@ class GreedySearch(SearchAlgorithm):
         (from the initial state) that leads to a goal state (i.e., no diamonds remain), based
         on the heuristic value.
         """
-        # Update instance variables.
         self.board = copy.deepcopy(board)
         self.diamonds = copy.deepcopy(diamonds)
         self.grid_size = len(board)
         
-        # Initialize the priority queue (min-heap).
-        # Each state: (heuristic_value, node_id, current_board, current_diamonds, first_move)
-        # first_move is (block, x, y) taken from the initial state.
+
         node_counter = 0
         initial_state = (self.evaluate_move(board, diamonds, self.blocks[0], (0,0)),
                          node_counter,
@@ -74,12 +73,14 @@ class GreedySearch(SearchAlgorithm):
 
 
 class AStarSearch(SearchAlgorithm):
+    def __init__(self, board, diamonds, name="A*", description="A* search algorithm"):
+        super().__init__(name, board, diamonds, "Informed search algorithm A*.")
     """
-    Búsqueda A*: Se trata de encontrar una secuencia de jugadas
-    que lleve a eliminar todos los diamantes con el menor costo
-    (menor cantidad de pasos, por ejemplo).
-    - g(n): número de movimientos hasta 'n'
-    - h(n): heurística (por ejemplo, número de diamantes restantes)
+    A* Search: The goal is to find a sequence of moves
+    that removes all diamonds with the lowest cost
+    (e.g., the smallest number of steps).
+    - g(n): number of moves to reach 'n'
+    - h(n): heuristic (e.g., number of remaining diamonds)
     """
     def evaluate_move(self, board, diamonds, block, move):
         new_board, new_diamonds = self.apply_move(board, diamonds, move, block)
@@ -111,14 +112,13 @@ class AStarSearch(SearchAlgorithm):
         h_start = self.heuristic(start_diamonds)
         f_start = g_start + h_start
         
-        # Priority queue: each entry is (f, g, state_hash, current_board, current_diamonds, path)
-        # where path is a sequence of moves, each of the form (block, x, y).
+
         open_heap = []
         start_hash = self.hash_state(start_board, start_diamonds)
         heapq.heappush(open_heap, (f_start, g_start, start_hash, start_board, start_diamonds, []))
         
         closed_set = set()
-        node_counter = 0  # Not strictly needed now.
+        node_counter = 0  
         
         while open_heap:
             f, g, state_hash, current_board, current_diamonds, path = heapq.heappop(open_heap)
@@ -130,7 +130,7 @@ class AStarSearch(SearchAlgorithm):
                 continue
             closed_set.add(state_hash)
             
-            self.board = current_board  # Update for move generation.
+            self.board = current_board 
             
             for block in self.blocks:
                 moves = self.possible_moves(block)
@@ -157,18 +157,12 @@ class WeightedAStarSearch(SearchAlgorithm):
     Weighted A*: f(n) = g(n) + w * h(n)
     Favours states with a lower heuristic value when w > 1.
     """
-    def __init__(self, name, board, diamonds, w=1.5, description="Weighted A*"):
+    def __init__(self, name, board, diamonds, description="Weighted A*",w = 1.5):
         super().__init__(name, board, diamonds, description)
         self.w = w  # Weight for the heuristic
-        # Define available block pieces if not already set.
-        self.blocks = [
-            [[1, 1, 1]],      # Horizontal block of 3
-            [[1], [1], [1]],   # Vertical block of 3
-            [[1, 1], [1, 1]]   # Square block of 2x2
-        ]
 
     def evaluate_move(self, board, diamonds, block, move):
-        # This method is not used directly in our implementation.
+        
         return 0
 
     def heuristic(self, diamonds):
@@ -195,7 +189,7 @@ class WeightedAStarSearch(SearchAlgorithm):
         f_start = g_start + self.w * h_start
         start_state_hash = self.hash_state(start_board, start_diamonds)
         
-        # Priority queue with tuples: (f, g, state_hash, (board, diamonds), path)
+        
         open_heap = []
         heapq.heappush(open_heap, (f_start, g_start, start_state_hash, (start_board, start_diamonds), []))
         closed_set = set()
@@ -210,7 +204,7 @@ class WeightedAStarSearch(SearchAlgorithm):
                 continue
             closed_set.add(state_hash)
             
-            self.board = current_board  # Update for move generation.
+            self.board = current_board  
             for block in self.blocks:
                 pmoves = self.possible_moves(block)
                 for move in pmoves:
@@ -226,43 +220,3 @@ class WeightedAStarSearch(SearchAlgorithm):
                     heapq.heappush(open_heap, (f_new, g_new, new_state_hash, (new_board, new_diamonds), new_path))
         
         return None
-if __name__ == "__main__":
-    # Tablero de ejemplo 5x5
-    board = [[0 for _ in range(5)] for _ in range(5)]
-    diamonds = [[0 for _ in range(5)] for _ in range(5)]
-
-    # Colocar algunos diamantes
-    diamonds[1][2] = 1
-    diamonds[2][1] = 1
-    diamonds[3][3] = 1
-
-    default_block = [[1, 1, 1]]
-
-    print("\n=== GREEDY SEARCH ===")
-    greedy = GreedySearch("Greedy", board, diamonds)
-    possible_moves = greedy.possible_moves(default_block)
-    print("Possible moves:", possible_moves)
-    best = greedy.get_best_move(greedy.blocks)
-    if best:
-        block, x, y = best
-        print(f"Greedy best move: Place block {block} at ({x}, {y})")
-    else:
-        print("No greedy solution found.")
-
-    print("\n=== A* SEARCH ===")
-    astar = AStarSearch("A*", board, diamonds)
-    best = astar.get_best_move(astar.blocks)
-    if best:
-        block, x, y = best
-        print(f"A* best move: Place block {block} at ({x}, {y})")
-    else:
-        print("No A* solution found.")
-
-    print("\n=== WEIGHTED A* SEARCH ===")
-    weighted_astar = WeightedAStarSearch("A* Weighted", board, diamonds, w=1.5)
-    best = weighted_astar.get_best_move(weighted_astar.blocks)
-    if best:
-        block, x, y = best
-        print(f"Weighted A* best move: Place block {block} at ({x}, {y})")
-    else:
-        print("No Weighted A* solution found.")
