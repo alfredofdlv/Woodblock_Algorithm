@@ -1,4 +1,8 @@
 from abc import ABC, abstractmethod
+import copy
+from collections import deque
+import random
+from abc import ABC, abstractmethod
 
 class SearchAlgorithm(ABC):
     def __init__(self, name, board, diamonds, description=""):
@@ -7,6 +11,11 @@ class SearchAlgorithm(ABC):
         self.grid_size = 5
         self.board = board
         self.diamonds = diamonds
+        self.blocks = [
+            [[1, 1, 1]],    # Horizontal block of 3
+            [[1], [1], [1]], # Vertical block of 3
+            [[1, 1], [1, 1]]  # Square block of 2x2
+        ]
 
     @abstractmethod
     def evaluate_move(self, move):
