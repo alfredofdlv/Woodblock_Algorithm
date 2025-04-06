@@ -40,3 +40,45 @@ class SearchAlgorithm(ABC):
                 if self.board[x + i][y + j] == 1:
                     return False
         return True
+    
+    def is_goal(self, diamonds):
+        """Goal is reached when there are no diamonds remaining."""
+        return sum(sum(row) for row in diamonds) == 0
+
+    def apply_move(self, board, diamonds, move, block):
+        """
+        Apply the move by placing the block on the board at the specified position.
+        Returns a new board and diamond configuration. This simplified version also clears
+        a row or column if it becomes completely filled.
+        """
+        new_board = copy.deepcopy(board)
+        new_diamonds = copy.deepcopy(diamonds)
+        x0, y0 = move
+        block_h, block_w = len(block), len(block[0])
+        
+        # Place the block.
+        for i in range(block_h):
+            for j in range(block_w):
+                if block[i][j] == 1:
+                    new_board[x0 + i][y0 + j] = 1
+        
+        # Dummy clearance: clear any completely filled row.
+        for i in range(self.grid_size):
+            if all(new_board[i][j] == 1 for j in range(self.grid_size)):
+                new_board[i] = [0] * self.grid_size
+                new_diamonds[i] = [0] * self.grid_size
+        
+        # Dummy clearance: clear any completely filled column.
+        for j in range(self.grid_size):
+            if all(new_board[i][j] == 1 for i in range(self.grid_size)):
+                for i in range(self.grid_size):
+                    new_board[i][j] = 0
+                    new_diamonds[i][j] = 0
+        
+        return new_board, new_diamonds
+
+    def hash_state(self, board, diamonds):
+        """Generate a hashable representation of the state."""
+        board_tuple = tuple(tuple(row) for row in board)
+        diamonds_tuple = tuple(tuple(row) for row in diamonds)
+        return (board_tuple, diamonds_tuple)
