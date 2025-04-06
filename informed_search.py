@@ -6,8 +6,6 @@ import numpy as np
 
 
 class GreedySearch(SearchAlgorithm):
-    def __init__(self, board, diamonds, name="Greedy Search"):
-        super().__init__(name, board, diamonds, "Greedy search algorithm.")
     """
     Greedy Strategy: at each step, the move that maximizes the immediate
     "gain" is chosen, without looking further ahead.
@@ -73,8 +71,6 @@ class GreedySearch(SearchAlgorithm):
 
 
 class AStarSearch(SearchAlgorithm):
-    def __init__(self, board, diamonds, name="A*", description="A* search algorithm"):
-        super().__init__(name, board, diamonds, "Informed search algorithm A*.")
     """
     A* Search: The goal is to find a sequence of moves
     that removes all diamonds with the lowest cost
